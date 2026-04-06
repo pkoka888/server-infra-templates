@@ -1,0 +1,23 @@
+{
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.extraPaths": [".agent", "lib"],
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.venv": true,
+    "**/.env": true
+  },
+  "shellExecute.shell": "/bin/bash",
+  "terminal.integrated.env.linux": {
+    "WORKDIR": "${workspaceFolder}"
+  }
+}
