@@ -1,0 +1,22 @@
+---
+# Common role template - copy and customize
+# TODO: Replace {role_name} with actual role name
+
+- name: Ensure role is present
+  ansible.builtin.package:
+    name: "{{ role_package | default('nginx') }}"
+    state: present
+
+- name: Configure role
+  ansible.builtin.template:
+    src: templates/config.conf.j2
+    dest: /etc/role/config.conf
+    mode: '0644'
+  notify: Restart service
+  when: role_config_enabled | default(true)
+
+- name: Ensure service is running
+  ansible.builtin.service:
+    name: "{{ role_service | default('nginx') }}"
+    state: started
+    enabled: true
