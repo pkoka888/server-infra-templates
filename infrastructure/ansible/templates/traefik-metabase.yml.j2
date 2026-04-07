@@ -1,0 +1,44 @@
+# Traefik dynamic configuration — metabase.expc.cz
+# Managed by Ansible — DO NOT edit manually
+# Source: s60:/var/www/metabase/infrastructure/ansible/templates/traefik-metabase.yml.j2
+# Note: HTTP→HTTPS redirect is handled globally by Traefik web entrypoint
+
+http:
+  routers:
+    metabase-expc:
+      rule: "Host(`metabase.expc.cz`)"
+      entryPoints:
+        - websecure
+      service: metabase-expc-backend
+      tls:
+        certResolver: le
+      middlewares:
+        - metabase-expc-headers
+        - metabase-expc-ratelimit
+
+  services:
+    metabase-expc-backend:
+      loadBalancer:
+        servers:
+          - url: "http://{{ hostvars['s60']['lan_ip'] }}:{{ hostvars['s60']['metabase_port'] }}"
+        healthCheck:
+          path: /api/health
+          interval: 30s
+          timeout: 10s
+
+  middlewares:
+    metabase-expc-headers:
+      headers:
+        frameDeny: false                    # Metabase uses iframes for embedding
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"  # BI tool — do not index
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+
+    metabase-expc-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1m

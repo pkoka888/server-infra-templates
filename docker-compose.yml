@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  metabase:
+    image: metabase/metabase:v0.59.5
+    container_name: metabase
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8096:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${MB_DB_USER}
+      MB_DB_PASS: ${MB_DB_PASS}
+      MB_DB_HOST: metabase-db
+      JAVA_TIMEZONE: Europe/Prague
+      TZ: Europe/Prague
+      MB_JETTY_MAX_THREADS: 25
+      MB_APPLICATION_DB_MAX_CONNECTION_POOL_SIZE: 25
+      MB_PROMETHEUS_ENABLED: "true"
+      MB_LIVENESS_CHECK_ENABLED: "true"
+      MB_ANALYTICS_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "-Xmx2g -Xms1g"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: "2.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      metabase-db:
+        condition: service_healthy
+    networks:
+      - metabase-net
+
+  metabase-db:
+    image: postgres:17-alpine
+    container_name: metabase-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: ${MB_DB_USER}
+      POSTGRES_PASSWORD: ${MB_DB_PASS}
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size=512MB
+      -c min_wal_size=80MB
+      -c max_connections=100
+    volumes:
+      - metabase-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MB_DB_USER} -d metabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - metabase-net
+
+volumes:
+  metabase-db-data:
+
+networks:
+  metabase-net:
+    driver: bridge

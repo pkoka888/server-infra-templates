@@ -1,0 +1,33 @@
+---
+# Ansible inventory for expc.cz infrastructure
+# All connections via Tailscale IPs
+
+all:
+  vars:
+    ansible_user: pavel
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+
+  hosts:
+    s60:
+      ansible_host: 100.111.141.111
+      ansible_connection: local   # playbook runs directly on s60
+      role: application_host
+      lan_ip: 192.168.1.60
+      metabase_port: 8096
+      metabase_dir: /var/www/metabase
+
+    s61:
+      ansible_host: 100.119.73.81
+      ansible_connection: ssh
+      role: edge_proxy
+      lan_ip: 192.168.1.61
+      traefik_dynamic_dir: /etc/traefik/dynamic
+
+  children:
+    application:
+      hosts:
+        s60:
+    proxy:
+      hosts:
+        s61:

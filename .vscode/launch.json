@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Query Metabase",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/query-metabase.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Backup Metabase",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/backup-metabase.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

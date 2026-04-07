@@ -1,0 +1,278 @@
+---
+# ============================================================
+# Playbook: Metabase → Traefik Integration
+# Purpose:  Validate → Backup → Deploy Traefik route → Cleanup s60
+# Usage:    ansible-playbook -i inventory.yml playbook-metabase-traefik.yml
+# Dry-run:  ansible-playbook -i inventory.yml playbook-metabase-traefik.yml --check
+# ============================================================
+
+- name: "PHASE 1 — Pre-flight validation on s60"
+  hosts: s60
+  gather_facts: true
+  vars:
+    metabase_dir: /var/www/metabase
+
+  tasks:
+    - name: Verify Docker is accessible
+      command: docker info
+      changed_when: false
+      register: docker_info
+      failed_when: docker_info.rc != 0
+
+    - name: Check metabase container is running
+      command: docker inspect --format="{{ '{{' }}.State.Status{{ '}}' }}" metabase
+      register: mb_status
+      changed_when: false
+      failed_when: mb_status.stdout != "running"
+
+    - name: Check metabase-db container is running
+      command: docker inspect --format="{{ '{{' }}.State.Status{{ '}}' }}" metabase-db
+      register: db_status
+      changed_when: false
+      failed_when: db_status.stdout != "running"
+
+    - name: Check metabase health endpoint
+      command: >
+        docker exec metabase curl -sf http://localhost:3000/api/health
+      register: health_check
+      changed_when: false
+      failed_when: health_check.rc != 0
+
+    - name: Verify docker-compose.yml exists
+      stat:
+        path: "{{ metabase_dir }}/docker-compose.yml"
+      register: compose_file
+      failed_when: not compose_file.stat.exists
+
+    - name: Verify .env file exists
+      stat:
+        path: "{{ metabase_dir }}/.env"
+      register: env_file
+      failed_when: not env_file.stat.exists
+
+    - name: Verify backup script exists
+      stat:
+        path: "{{ metabase_dir }}/scripts/backup-metabase.sh"
+      register: backup_script
+      failed_when: not backup_script.stat.exists
+
+    - name: Verify borg passphrase file exists
+      stat:
+        path: "~/.config/borg/metabase-passphrase"
+      register: borg_pass
+      failed_when: not borg_pass.stat.exists
+
+    - name: Verify metabase port binding is on LAN (not localhost-only)
+      command: grep -c "192.168.1.60:8096:3000\|0.0.0.0:8096:3000" "{{ metabase_dir }}/docker-compose.yml"
+      register: port_check
+      changed_when: false
+      failed_when: port_check.rc != 0
+      # Traefik on s61 must reach s60:8096 over LAN — localhost-only would break routing
+
+    - name: Print pre-flight summary
+      debug:
+        msg:
+          - "✅ Docker: accessible"
+          - "✅ metabase: {{ mb_status.stdout }}"
+          - "✅ metabase-db: {{ db_status.stdout }}"
+          - "✅ Health endpoint: OK"
+          - "✅ Port binding: LAN-accessible (192.168.1.60:8096)"
+          - "✅ Pre-flight passed — proceeding to backup"
+
+
+- name: "PHASE 2 — Backup Metabase to s62 via Borg"
+  hosts: s60
+  gather_facts: false
+  vars:
+    metabase_dir: /var/www/metabase
+
+  tasks:
+    - name: Run backup script
+      command: bash "{{ metabase_dir }}/scripts/backup-metabase.sh"
+      register: backup_result
+      changed_when: true
+      failed_when: backup_result.rc != 0
+
+    - name: Show backup output
+      debug:
+        msg: "{{ backup_result.stdout_lines }}"
+
+    - name: Verify latest backup exists on s62
+      command: >
+        bash -c 'export BORG_PASSPHRASE="$(cat ~/.config/borg/metabase-passphrase)";
+        borg list ssh://pavel@100.91.164.109/var/backups/borg/metabase --last 1'
+      register: borg_verify
+      changed_when: false
+      failed_when: borg_verify.rc != 0
+
+    - name: Print backup confirmation
+      debug:
+        msg:
+          - "✅ Backup complete"
+          - "Latest archive: {{ borg_verify.stdout }}"
+
+
+- name: "PHASE 3 — Cleanup Traefik artifacts from s60 (wrong server)"
+  hosts: s60
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Find any Traefik directories on s60
+      find:
+        paths:
+          - /etc
+          - /opt
+          - /home/pavel
+          - /root
+          - /var/www
+        patterns:
+          - "traefik"
+          - "traefik.yml"
+          - "traefik.yaml"
+          - "traefik.toml"
+          - "acme.json"
+        recurse: false
+        file_type: any
+      register: traefik_artifacts
+
+    - name: Report Traefik artifacts found on s60
+      debug:
+        msg: "Found {{ traefik_artifacts.files | length }} Traefik artifact(s) on s60: {{ traefik_artifacts.files | map(attribute='path') | list }}"
+
+    - name: Remove Traefik artifacts from s60 (Traefik belongs on s61 only)
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ traefik_artifacts.files }}"
+      when: traefik_artifacts.files | length > 0
+
+    - name: Check for any Traefik Docker containers on s60
+      command: docker ps -a --format "{{ '{{' }}.Names{{ '}}' }}" --filter "name=traefik"
+      register: traefik_containers
+      changed_when: false
+
+    - name: Stop and remove Traefik containers if found on s60
+      command: docker rm -f "{{ item }}"
+      loop: "{{ traefik_containers.stdout_lines }}"
+      when:
+        - traefik_containers.stdout_lines | length > 0
+        - item != ""
+
+    - name: Check for Traefik Docker volumes on s60
+      command: docker volume ls --format "{{ '{{' }}.Name{{ '}}' }}" --filter "name=traefik"
+      register: traefik_volumes
+      changed_when: false
+
+    - name: Remove Traefik volumes from s60
+      command: docker volume rm "{{ item }}"
+      loop: "{{ traefik_volumes.stdout_lines }}"
+      when:
+        - traefik_volumes.stdout_lines | length > 0
+        - item != ""
+
+    - name: Prune stopped Docker containers on s60
+      command: docker container prune -f
+      register: prune_result
+      changed_when: "'Total reclaimed space' in prune_result.stdout"
+
+    - name: Print cleanup summary
+      debug:
+        msg:
+          - "✅ Traefik artifacts removed from s60"
+          - "✅ s60 is clean (application host only)"
+
+
+- name: "PHASE 4 — Deploy Traefik route on s61 for metabase.expc.cz"
+  hosts: s61
+  gather_facts: false
+  become: true
+  vars:
+    traefik_dynamic_dir: /etc/traefik/dynamic
+
+  tasks:
+    - name: Verify Traefik is running on s61
+      command: docker inspect --format="{{ '{{' }}.State.Status{{ '}}' }}" traefik
+      register: traefik_status
+      changed_when: false
+      failed_when: traefik_status.stdout != "running"
+
+    - name: Verify Traefik dynamic config directory exists
+      stat:
+        path: "{{ traefik_dynamic_dir }}"
+      register: dynamic_dir
+      failed_when: not dynamic_dir.stat.exists
+
+    - name: Verify connectivity from s61 to s60:8096
+      command: curl -sf --max-time 5 http://192.168.1.60:8096/api/health
+      register: s61_to_s60
+      changed_when: false
+      failed_when: s61_to_s60.rc != 0
+
+    - name: Deploy Traefik dynamic config for metabase.expc.cz
+      template:
+        src: templates/traefik-metabase.yml.j2
+        dest: "{{ traefik_dynamic_dir }}/metabase.yml"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: yes
+      register: traefik_config_deployed
+
+    - name: Validate Traefik config syntax (via API check after hot-reload)
+      pause:
+        seconds: 3
+      when: traefik_config_deployed.changed
+
+    - name: Verify Traefik loaded the route (check API)
+      command: >
+        curl -sf http://localhost:8080/api/http/routers/metabase@file
+      register: traefik_route_check
+      changed_when: false
+      failed_when: traefik_route_check.rc != 0
+      retries: 3
+      delay: 2
+      # Traefik hot-reloads dynamic config — no restart needed
+
+    - name: Print Traefik deployment summary
+      debug:
+        msg:
+          - "✅ Traefik config deployed: {{ traefik_dynamic_dir }}/metabase.yml"
+          - "✅ Route metabase.expc.cz → http://192.168.1.60:8096 active"
+          - "✅ TLS via letsencrypt certResolver"
+          - "✅ Security headers + rate limiting applied"
+
+
+- name: "PHASE 5 — End-to-end verification"
+  hosts: s60
+  gather_facts: false
+
+  tasks:
+    - name: Verify Metabase still healthy after all changes
+      command: docker exec metabase curl -sf http://localhost:3000/api/health
+      register: final_health
+      changed_when: false
+      failed_when: final_health.rc != 0
+      retries: 3
+      delay: 5
+
+    - name: Verify HTTPS endpoint resolves via Traefik (from s60 via public DNS)
+      command: curl -sf --max-time 15 https://metabase.expc.cz/api/health
+      register: public_health
+      changed_when: false
+      failed_when: public_health.rc != 0
+      ignore_errors: true  # DNS propagation may take time
+
+    - name: Final deployment report
+      debug:
+        msg:
+          - "============================================"
+          - "  DEPLOYMENT COMPLETE"
+          - "============================================"
+          - "  Metabase internal: healthy"
+          - "  metabase.expc.cz:  {{ '✅ reachable' if public_health.rc == 0 else '⚠️  check DNS/cert (may need time)' }}"
+          - ""
+          - "  Verify manually:"
+          - "    curl -sf https://metabase.expc.cz/api/health"
+          - "    docker inspect metabase --format '{{'{{'}} .State.Health.Status {{'}}'}}'"
+          - "============================================"

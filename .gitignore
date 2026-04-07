@@ -1,0 +1,35 @@
+# Environment
+.env
+.env.local
+.env.*
+!.env.example
+users-tasks.md
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Agent/IDE tooling
+.kilo/node_modules/
+.opencode/node_modules/
+.agent/state/
+.agent/portfolio/
+
+# IDE
+.idea/
+
+# Backup files
+*-backup-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Metabase data (use PostgreSQL instead)
+metabase-data/
