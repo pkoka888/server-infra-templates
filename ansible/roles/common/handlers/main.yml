@@ -1,0 +1,12 @@
+---
+# Handlers for common role
+
+- name: Restart service
+  ansible.builtin.service:
+    name: "{{ role_service | default('nginx') }}"
+    state: restarted
+
+- name: Reload service
+  ansible.builtin.service:
+    name: "{{ role_service | default('nginx') }}"
+    state: reloaded

@@ -1,16 +1,15 @@
 ---
-# Common role template - copy and customize
-# TODO: Replace {role_name} with actual role name
+# Common role template - copy to roles/{role_name}/tasks/main.yml
 
-- name: Ensure role is present
+- name: Ensure package is installed
   ansible.builtin.package:
     name: "{{ role_package | default('nginx') }}"
     state: present
 
-- name: Configure role
+- name: Configure application
   ansible.builtin.template:
     src: templates/config.conf.j2
-    dest: /etc/role/config.conf
+    dest: /etc/{{ role_name | default('myapp') }}/config.conf
     mode: '0644'
   notify: Restart service
   when: role_config_enabled | default(true)

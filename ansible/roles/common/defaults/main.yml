@@ -1,0 +1,11 @@
+---
+# Default variables for common role
+# Override in playbook or inventory
+
+role_name: myapp
+role_package: nginx
+role_service: nginx
+role_port: 8080
+role_backend_port: 3000
+role_domain: localhost
+role_config_enabled: true
