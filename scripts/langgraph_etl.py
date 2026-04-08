@@ -101,6 +101,42 @@ def extract_data(node_input: dict) -> dict:
     return {"results": results, "errors": errors}
 
 
+def load_data(node_input: dict) -> dict:
+    """Load data to warehouse (placeholder for dbt run)."""
+    import subprocess
+
+    client_id = node_input.get("client_id")
+    results = node_input.get("results", {})
+    errors = node_input.get("errors", [])
+
+    logger.info(f"Loading data for {client_id}")
+
+    # Run dbt run
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    result = subprocess.run(
+        ["dbt", "run", "--profiles-dir", "dbt", "--project-dir", "dbt"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir,
+    )
+
+    if result.returncode == 0:
+        results["dbt_run"] = {"status": "success", "output": result.stdout}
+    else:
+        errors.append({"stage": "load", "error": result.stderr, "severity": "error"})
+        results["dbt_run"] = {"status": "failed"}
+
+    node_input["completed_at"] = datetime.now().isoformat()
+    node_input["status"] = "failed" if errors else "completed"
+
+    return {
+        "results": results,
+        "errors": errors,
+        "completed_at": node_input["completed_at"],
+        "status": node_input["status"],
+    }
+
+
 if LANGGRAPH_AVAILABLE:
     # Create the ETL graph
     def build_etl_graph():
