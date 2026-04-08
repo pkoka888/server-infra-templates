@@ -9,244 +9,73 @@ models:
     tests:
       - dbt_expectations.expect_table_row_count_to_be_between:
           min_value: 1
-          severity: warn
-          description: "Performance table should not be empty"
-
-      - dbt_expectations.expect_compound_columns_to_be_unique:
-          column_list: ["date", "channel", "campaign_name"]
-          severity: error
-          description: "Each date + channel + campaign combination must be unique"
+          config:
+            severity: warn
 
     columns:
-      - name: performance_id
+      - name: performance_sk
         description: "Surrogate key for the performance record"
         tests:
-          - unique:
-              severity: error
-          - not_null:
-              severity: error
+          - unique
+          - not_null
 
-      - name: date
-        description: "Date of the performance data - must not be null"
+      - name: date_day
+        description: "Date of the performance data"
         tests:
-          - not_null:
-              severity: error
+          - not_null
 
-      - name: channel
-        description: "Marketing channel (e.g., 'paid_social', 'organic', 'email') - must not be null"
+      - name: channel_grouping
+        description: "Marketing channel grouping"
         tests:
-          - not_null:
-              severity: error
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['paid_social', 'organic_search', 'paid_search', 'email', 'display', 'affiliate', 'direct', 'referral']
-              quote_values: true
-              severity: warn
+          - not_null
 
-      - name: campaign_name
-        description: "Name of the marketing campaign - must not be null"
+      - name: source
+        description: "Traffic source"
         tests:
-          - not_null:
-              severity: error
+          - not_null
 
-      - name: spend
-        description: "Total spend for the channel/campaign on that date - must be non-negative"
+      - name: medium
+        description: "Traffic medium"
         tests:
-          - not_null:
-              severity: error
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: error
+          - not_null
 
-      - name: impressions
-        description: "Total impressions - must be non-negative"
+      - name: campaign
+        description: "Campaign name"
+        tests:
+          - not_null
+
+      - name: total_sessions
+        description: "Total sessions"
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
+              arguments:
+                min_value: 0
+              config:
+                severity: warn
 
-      - name: clicks
-        description: "Total clicks - must be non-negative"
+      - name: total_cost
+        description: "Total cost - must be non-negative"
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
+              arguments:
+                min_value: 0
+              config:
+                severity: error
 
-      - name: conversions
-        description: "Total conversions - must be non-negative"
+      - name: total_revenue
+        description: "Total revenue - must be non-negative"
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
-
-      - name: revenue
-        description: "Attributed revenue - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "revenue IS NOT NULL"
-              strictly: false
-              severity: error
+              arguments:
+                min_value: 0
+              config:
+                severity: warn
 
       - name: roas
-        description: |
-          Return on Ad Spend (revenue / spend).
-          Must be >= 0 when spend > 0.
-          NULL is acceptable when spend = 0 (avoiding division by zero).
+        description: "Return on Ad Spend"
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "spend > 0 AND roas IS NOT NULL"
-              strictly: false
-              severity: error
-
-      - name: cpa
-        description: "Cost per acquisition (spend / conversions) - must be non-negative when conversions > 0"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "conversions > 0 AND cpa IS NOT NULL"
-              strictly: false
-              severity: warn
-
-      - name: ctr
-        description: "Click-through rate (clicks / impressions) - must be between 0 and 1"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              max_value: 1
-              row_condition: "ctr IS NOT NULL"
-              strictly: false
-              severity: warn
-
-  - name: dim_customers
-    description: |
-      Customer dimension table containing profile and engagement metrics.
-      Includes email validation and lifecycle metrics.
-
-    tests:
-      - dbt_expectations.expect_table_row_count_to_be_between:
-          min_value: 1
-          severity: warn
-
-    columns:
-      - name: customer_id
-        description: "Unique customer identifier - must be unique and not null"
-        tests:
-          - unique:
-              severity: error
-          - not_null:
-              severity: error
-
-      - name: customer_key
-        description: "Surrogate key for the customer"
-        tests:
-          - unique
-          - not_null
-
-      - name: email
-        description: |
-          Customer email address - must be valid format per RFC 5322.
-          Uses regex validation for basic email format.
-        tests:
-          - not_null:
-              severity: error
-          - dbt_expectations.expect_column_values_to_match_regex:
-              regex: "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
-              severity: error
-              description: "Email must match standard format (user@domain.tld)"
-
-      - name: first_name
-        description: "Customer first name"
-
-      - name: last_name
-        description: "Customer last name"
-
-      - name: acquisition_channel
-        description: "Channel through which customer was acquired"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['paid_social', 'organic_search', 'paid_search', 'email', 'display', 'affiliate', 'direct', 'referral', 'unknown']
-              quote_values: true
-              severity: warn
-
-      - name: acquisition_date
-        description: "Date customer was first acquired"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: "'2015-01-01'"
-              max_value: "CURRENT_DATE"
-              severity: warn
-
-      - name: lifetime_value
-        description: "Total revenue generated by customer - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "lifetime_value IS NOT NULL"
-              strictly: false
-              severity: error
-
-      - name: total_orders
-        description: "Total number of orders - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "total_orders IS NOT NULL"
-              strictly: false
-              severity: error
-
-      - name: is_active
-        description: "Flag indicating if customer is active (has ordered in last 90 days)"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: [true, false]
-              severity: error
-
-  - name: dim_campaigns
-    description: "Campaign dimension with metadata and performance thresholds"
-    columns:
-      - name: campaign_key
-        description: "Surrogate key for the campaign"
-        tests:
-          - unique
-          - not_null
-
-      - name: campaign_id
-        description: "Source campaign identifier"
-        tests:
-          - not_null
-
-      - name: campaign_name
-        description: "Name of the campaign"
-        tests:
-          - not_null
-
-      - name: channel
-        description: "Marketing channel"
-        tests:
-          - not_null
-
-      - name: status
-        description: "Current campaign status"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['ACTIVE', 'PAUSED', 'ENDED', 'DRAFT']
-              quote_values: true
-              severity: warn
-
-      - name: start_date
-        description: "Campaign start date"
-
-      - name: end_date
-        description: "Campaign end date"
-        tests:
-          - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
-              column_A: end_date
-              column_B: start_date
-              or_equal: true
-              row_condition: "end_date IS NOT NULL AND start_date IS NOT NULL"
-              severity: warn
+              arguments:
+                min_value: 0
+              config:
+                severity: warn

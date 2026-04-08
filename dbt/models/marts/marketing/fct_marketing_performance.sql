@@ -1,8 +1,8 @@
-{{-
+{#
   Marketing Performance Fact Model
   Unions data from GA4, Facebook Ads, and PrestaShop
   Provides unified view of marketing performance across channels
--}}
+#}
 
 with
 

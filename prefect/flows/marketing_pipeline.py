@@ -25,6 +25,8 @@ logging.basicConfig(level=logging.INFO)
 # Constants - auto-detect environment
 import os
 
+import sys
+
 if os.path.exists("/var/www/meta.expc.cz"):
     PROJECT_ROOT = Path("/var/www/meta.expc.cz")
 elif os.path.exists("/workspace"):
@@ -32,7 +34,10 @@ elif os.path.exists("/workspace"):
 else:
     PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+PYTHON_BINARY = Path(sys.executable)
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt"
+DBT_BINARY = PROJECT_ROOT / ".venv" / "bin" / "dbt"
+DBT_PROFILES_DIR = Path.home() / ".dbt"
 PIPELINE_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline.py"
 
 
@@ -57,7 +62,7 @@ def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
     logger.info(f"Starting dlt sync: {source_name} for client {client_id}")
 
     cmd = [
-        "python",
+        str(PYTHON_BINARY),
         str(PIPELINE_SCRIPT),
         "--source",
         source_name,
@@ -71,7 +76,7 @@ def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
-            cwd=PROJECT_ROOT,
+            cwd=str(PROJECT_ROOT),
         )
         logger.info(f"dlt sync {source_name} completed successfully")
         return {
@@ -106,8 +111,14 @@ def run_dbt_models(project_dir: Path, models: str | None = None) -> dict[str, An
     logger = get_run_logger()
     logger.info(f"Running dbt models in {project_dir}")
 
-    # Build dbt run command
-    cmd = ["dbt", "run", "--project-dir", str(project_dir)]
+    cmd = [
+        str(DBT_BINARY),
+        "run",
+        "--project-dir",
+        str(project_dir),
+        "--profiles-dir",
+        str(DBT_PROFILES_DIR),
+    ]
     if models:
         cmd.extend(["--select", models])
 
@@ -117,7 +128,8 @@ def run_dbt_models(project_dir: Path, models: str | None = None) -> dict[str, An
             capture_output=True,
             text=True,
             check=True,
-            cwd=project_dir,
+            cwd=str(project_dir),
+            env={**os.environ, "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "")},
         )
         logger.info("dbt run completed successfully")
         return {
@@ -149,7 +161,14 @@ def run_dbt_tests(project_dir: Path) -> dict[str, Any]:
     logger = get_run_logger()
     logger.info(f"Running dbt tests in {project_dir}")
 
-    cmd = ["dbt", "test", "--project-dir", str(project_dir)]
+    cmd = [
+        str(DBT_BINARY),
+        "test",
+        "--project-dir",
+        str(project_dir),
+        "--profiles-dir",
+        str(DBT_PROFILES_DIR),
+    ]
 
     try:
         result = subprocess.run(
@@ -157,7 +176,8 @@ def run_dbt_tests(project_dir: Path) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
-            cwd=project_dir,
+            cwd=str(project_dir),
+            env={**os.environ, "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "")},
         )
         logger.info("dbt test completed successfully")
         return {

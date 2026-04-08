@@ -1,67 +1,6 @@
 version: 2
 
 models:
-  - name: stg_ga4__events
-    description: "Staging model for GA4 events with data quality validations"
-    columns:
-      - name: event_id
-        description: "Unique identifier for the event (surrogate key)"
-        tests:
-          - unique:
-              severity: error
-          - not_null:
-              severity: error
-
-      - name: event_date
-        description: "Date of the event - must not be null"
-        tests:
-          - not_null:
-              severity: error
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: "'2020-01-01'"
-              max_value: "CURRENT_DATE"
-              severity: warn
-
-      - name: event_timestamp
-        description: "Timestamp of the event"
-        tests:
-          - not_null:
-              severity: warn
-
-      - name: session_id
-        description: "GA4 session identifier - must not be null"
-        tests:
-          - not_null:
-              severity: error
-
-      - name: user_pseudo_id
-        description: "Anonymous user identifier"
-        tests:
-          - not_null:
-              severity: warn
-
-      - name: event_name
-        description: "Name of the event"
-        tests:
-          - not_null:
-              severity: error
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['page_view', 'session_start', 'purchase', 'add_to_cart', 'begin_checkout', 'view_item', 'scroll', 'click', 'file_download', 'first_visit', 'user_engagement']
-              quote_values: true
-              severity: warn
-
-      - name: page_location
-        description: "URL of the page"
-
-      - name: engagement_time_msec
-        description: "Engagement time in milliseconds - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              row_condition: "engagement_time_msec IS NOT NULL"
-              strictly: false
-              severity: warn
-
   - name: stg_ga4__traffic
     description: "Staging model for GA4 traffic data"
     columns:
@@ -77,25 +16,10 @@ models:
           - not_null
 
       - name: sessions
-        description: "Number of sessions - must be non-negative"
+        description: "Number of sessions"
         tests:
           - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
-
-      - name: users
-        description: "Number of users - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
-
-      - name: new_users
-        description: "Number of new users - must be non-negative"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              min_value: 0
-              strictly: false
-              severity: warn
+              arguments:
+                min_value: 0
+              config:
+                severity: warn

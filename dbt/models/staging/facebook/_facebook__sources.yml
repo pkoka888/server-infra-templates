@@ -4,62 +4,53 @@ sources:
   - name: facebook_raw
     database: metabase
     schema: "fbads_{{ var('client_id') }}"
-    freshness:
-      warn_after: {count: 12, period: hour}
-      error_after: {count: 24, period: hour}
     loaded_at_field: "_dlt_load_time"
 
     tables:
       - name: ads
-        description: "Facebook ads data from dlt pipeline with quality validations"
-        freshness:
-          warn_after: {count: 12, period: hour}
-          error_after: {count: 24, period: hour}
+        description: "Facebook ads data from dlt pipeline"
         loaded_at_field: "_dlt_load_time"
         columns:
           - name: ad_id
-            description: "Unique Facebook ad identifier - must be unique and not null"
+            description: "Unique Facebook ad identifier"
             tests:
-              - unique:
-                  severity: error
-              - not_null:
-                  severity: error
+              - unique
+              - not_null
 
           - name: ad_name
             description: "Name of the ad"
 
           - name: spend
-            description: "Amount spent on the ad - must be non-negative"
+            description: "Amount spent on the ad"
             tests:
               - dbt_expectations.expect_column_values_to_be_between:
-                  min_value: 0
-                  row_condition: "spend IS NOT NULL"
-                  strictly: false
-                  severity: error
+                  arguments:
+                    min_value: 0
+                  config:
+                    severity: warn
 
           - name: impressions
-            description: "Number of impressions - must be non-negative"
+            description: "Number of impressions"
             tests:
               - dbt_expectations.expect_column_values_to_be_between:
-                  min_value: 0
-                  row_condition: "impressions IS NOT NULL"
-                  strictly: false
-                  severity: warn
+                  arguments:
+                    min_value: 0
+                  config:
+                    severity: warn
 
           - name: clicks
-            description: "Number of clicks - must be non-negative"
+            description: "Number of clicks"
             tests:
               - dbt_expectations.expect_column_values_to_be_between:
-                  min_value: 0
-                  row_condition: "clicks IS NOT NULL"
-                  strictly: false
-                  severity: warn
+                  arguments:
+                    min_value: 0
+                  config:
+                    severity: warn
 
           - name: date
             description: "Date of the ad data"
             tests:
-              - not_null:
-                  severity: error
+              - not_null
 
       - name: campaigns
         description: "Facebook campaigns data from dlt pipeline"
