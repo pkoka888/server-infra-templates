@@ -355,3 +355,77 @@ chmod 600 ~/.vault_pass
 # Edit encrypted secrets
 ansible-vault edit ansible/group_vars/all/vault.yml.example
 ```
+
+## Observability Stack (LGTM+)
+
+Full observability pipeline with Loki, Grafana, and LangGraph.
+
+### Endpoints
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Loki | http://100.91.164.109:3100 | Log aggregation |
+| Grafana | http://100.91.164.109:3000 | Dashboards & alerting |
+
+### Quick Commands
+
+```bash
+# Push test log to Loki
+curl -X POST "http://100.91.164.109:3100/loki/api/v1/push" \
+  -H "Content-Type: application/json" \
+  -d '{"streams":[{"stream":{"job":"test"},"values":[["'"$(date +%s)"'000000000","test message"]]}]}'
+
+# Query logs from Loki
+curl "http://100.91.164.109:3100/loki/api/v1/query?query={job=\"test\"}"
+
+# Check Loki health
+curl http://100.91.164.109:3100/ready
+
+# Run LangGraph observability pipeline
+cd /var/www/meta.expc.cz && uv run python scripts/langgraph_observability.py
+```
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `docs/observability/OBSERVABILITY_KB.md` | Full knowledge base |
+| `scripts/langgraph_observability.py` | LangGraph pipeline |
+| `scripts/agent_logger.py` | Agent logging module |
+| `config/promtail-config.yaml` | Promtail configuration |
+
+### LogQL Examples
+
+```logql
+# All logs
+{job="myapp"}
+
+# Error logs
+{job="myapp"} |= "error"
+
+# JSON parsing
+{job="api"} | json | level="error"
+
+# Rate queries
+sum(rate({level="error"}[5m]))
+
+# Top 10 errors
+topk(10, sum by (service) (rate({level="error"}[5m])))
+```
+
+### Agent Logging
+
+```python
+from agent_logger import AgentLogger
+
+logger = AgentLogger(
+    agent_name="my-agent",
+    loki_url="http://100.91.164.109:3100",
+    log_file="/var/log/agent.log"
+)
+
+logger.task_start("task-123", "code_generation")
+# ... do work ...
+logger.task_complete("task-123", "code_generation", 1500)
+logger.error("Something failed", error_type="ValueError")
+```
