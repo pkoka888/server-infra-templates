@@ -22,8 +22,16 @@ def exponential_backoff(backoff_factor: float = 2):
 
 logging.basicConfig(level=logging.INFO)
 
-# Constants
-PROJECT_ROOT = Path("/var/www/meta.expc.cz")
+# Constants - auto-detect environment
+import os
+
+if os.path.exists("/var/www/meta.expc.cz"):
+    PROJECT_ROOT = Path("/var/www/meta.expc.cz")
+elif os.path.exists("/workspace"):
+    PROJECT_ROOT = Path("/workspace")
+else:
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt"
 PIPELINE_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline.py"
 

@@ -3,7 +3,7 @@ prefect-version: 3.0.0
 deployments:
   - name: marketing-analytics-client1
     work_pool:
-      name: docker-pool
+      name: process-pool
     flow_location: ./prefect/flows/marketing_pipeline.py
     entrypoint: prefect/flows/marketing_pipeline.py:marketing_analytics_pipeline
     parameters:
@@ -13,10 +13,8 @@ deployments:
         - gads
         - fbads
         - prestashop
-    schedule:
-      cron: 0 1 * * *
-      timezone: Europe/Prague
     tags:
       - marketing
       - etl
       - client1
+    version: "1.0.0"

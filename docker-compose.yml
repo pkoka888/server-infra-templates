@@ -140,12 +140,15 @@ services:
     image: prefecthq/prefect:3-latest
     container_name: prefect-worker
     restart: unless-stopped
+    network_mode: host
+    working_dir: /workspace
     command: /bin/bash -c "pip install prefect-docker && prefect worker start --pool docker-pool"
     environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_URL: http://127.0.0.1:4200/api
       PREFECT_SERVER_ALLOW_EPHEMERAL_MODE: "false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/www/meta.expc.cz:/workspace
     deploy:
       resources:
         limits:
@@ -159,8 +162,6 @@ services:
     depends_on:
       prefect-server:
         condition: service_started
-    networks:
-      - metabase-net
 
 volumes:
   metabase-db-data:
