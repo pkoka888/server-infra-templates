@@ -203,3 +203,144 @@ uv run ruff check .
 uv run mypy .
 uv run pytest
 ```
+
+## dbt Transformations
+
+The platform uses **dbt** (data build tool) for SQL transformations with a staging → marts architecture.
+
+### Project Structure
+
+```
+dbt/
+├── dbt_project.yml           # Project configuration
+├── profiles.yml             # Database connections
+├── packages.yml             # Package dependencies
+├── macros/                  # Custom macros
+│   └── data_quality/
+│       └── _validations.sql # Shared validation macros
+└── models/
+    ├── staging/            # Source-conformed models
+    │   ├── ga4/            # stg_ga4__traffic
+    │   ├── facebook/        # stg_facebook__ads, campaigns
+    │   └── prestashop/     # stg_prestashop__orders
+    └── marts/
+        └── marketing/       # fct_marketing_performance
+```
+
+### Running dbt
+
+```bash
+# Navigate to dbt directory
+cd dbt
+
+# Install dependencies
+dbt deps
+
+# Run all models
+dbt run
+
+# Run specific client
+dbt run --vars '{"client_id": "client1"}'
+
+# Run tests
+dbt test
+
+# Generate documentation
+dbt docs generate
+dbt docs serve
+```
+
+### dbt Docker Service
+
+```bash
+# Run dbt in Docker container
+docker compose run --rm dbt dbt run
+
+# Or with specific vars
+docker compose run --rm dbt dbt run --vars '{"client_id": "client1"}'
+```
+
+## Prefect Orchestration
+
+**Prefect** handles workflow orchestration with scheduled pipelines and retry policies.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Prefect Server                          │
+│                     (Port 4200)                            │
+└─────────────────────────────┬───────────────────────────────┘
+                              │ PREFECT_API_URL
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Prefect Worker                         │
+│                 (Docker work pool)                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Marketing Pipeline                      │
+│  dlt sync (GA4/FB Ads/PrestaShop) → dbt run → dbt test   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Commands
+
+```bash
+# Start Prefect server and worker
+docker compose up -d prefect-server prefect-worker
+
+# Access Prefect UI
+open http://localhost:4200
+
+# Deploy pipeline for client
+python prefect/deployments/marketing_analytics.py --client client1
+
+# Deploy for all clients
+python prefect/deployments/marketing_analytics.py --all
+
+# Check flow status
+docker exec prefect-server prefect flow ls
+```
+
+### Flow Features
+
+- **Parallel execution**: dlt syncs run concurrently
+- **Timeouts**: dlt (10min), dbt run (15min), dbt test (5min)
+- **Retries**: Exponential backoff with jitter
+- **Schedule**: Daily at 2 AM
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| `docs/ONBOARDING.md` | User onboarding manual |
+| `docs/DEPENDENCIES.md` | Architecture diagram |
+| `docs/DOCKER_CONVENTIONS.md` | Container/volume naming standards |
+| `docs/SOP.md` | Standard operating procedures |
+| `docs/SOPS_VAULT.md` | Secrets management (SOPS + Ansible) |
+
+## Ansible Infrastructure
+
+```bash
+# Deploy platform with Ansible
+ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass
+
+# Backup database
+ansible-playbook ansible/playbooks/backup.yml --ask-vault-pass
+
+# Rotate secrets
+ansible-playbook ansible/playbooks/rotate-secrets.yml --ask-vault-pass
+```
+
+### Ansible Vault Setup
+
+```bash
+# Create vault password
+echo "your-password" > ~/.vault_pass
+chmod 600 ~/.vault_pass
+
+# Edit encrypted secrets
+ansible-vault edit ansible/group_vars/all/vault.yml.example
+```
