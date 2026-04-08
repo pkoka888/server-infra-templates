@@ -110,14 +110,15 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:4200:4200"
-    command: prefect server start --host 0.0.0.0
+    command: /bin/bash -c "prefect config set PREFECT_API_URL=http://localhost:4200/api && prefect server start --host 0.0.0.0"
     environment:
       PREFECT_HOME: /data
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_URL: http://localhost:4200/api
     volumes:
       - prefect-data:/data
     healthcheck:
-      test: ["CMD", "prefect", "server", "status"]
+      test: ["CMD-SHELL", "curl -f http://localhost:4200/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -139,7 +140,7 @@ services:
     image: prefecthq/prefect:3-latest
     container_name: prefect-worker
     restart: unless-stopped
-    command: prefect worker start --pool docker --type docker
+    command: /bin/bash -c "pip install prefect-docker && prefect worker start --pool docker-pool"
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_SERVER_ALLOW_EPHEMERAL_MODE: "false"
@@ -157,7 +158,7 @@ services:
         max-file: "3"
     depends_on:
       prefect-server:
-        condition: service_healthy
+        condition: service_started
     networks:
       - metabase-net
 
