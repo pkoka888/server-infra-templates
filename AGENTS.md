@@ -135,10 +135,21 @@ Each client gets separate datasets:
 
 ### Scheduling
 
+> **IMPORTANT**: ETL runs at 01:00-02:30 to avoid conflict with 03:00 backup window.
+
 ```bash
 # crontab -e
-# Daily at 2am for each client
-0 2 * * * cd /var/www/metabase && source .venv/bin/activate && python scripts/pipeline.py --all --client client1 >> logs/pipeline_client1.log 2>&1
+# Daily at 1am for each client (BEFORE backup at 3am)
+0 1 * * * cd /var/www/metabase && source .venv/bin/activate && python scripts/pipeline.py --all --client client1 >> logs/pipeline_client1.log 2>&1
+
+# Client 2 - staggered 30 min later
+30 1 * * * cd /var/www/metabase && source .venv/bin/activate && python scripts/pipeline.py --all --client client2 >> logs/pipeline_client2.log 2>&1
+
+# dbt run - after ETL completes
+30 2 * * * cd /var/www/metabase/dbt && source ../.venv/bin/activate && dbt run --target prod >> ../logs/dbt_run.log 2>&1
+
+# dbt test - after dbt run
+45 2 * * * cd /var/www/metabase/dbt && source ../.venv/bin/activate && dbt test --target prod >> ../logs/dbt_test.log 2>&1
 ```
 
 ### LangGraph ETL Integration

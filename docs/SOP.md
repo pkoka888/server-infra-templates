@@ -42,13 +42,16 @@ docker logs prefect-worker --tail 50
 
 ### Daily ETL Pipeline
 
+> **NOTE**: ETL runs BEFORE backup window to avoid conflicts.
+> ETL completes by 02:30, backup starts at 03:00.
+
 | Time | Task | Command |
 |------|------|---------|
-| 02:00 | GA4 sync | `python scripts/pipeline.py --source ga4 --client client1` |
-| 02:30 | Facebook sync | `python scripts/pipeline.py --source fbads --client client1` |
-| 03:00 | PrestaShop sync | `python scripts/pipeline.py --source prestashop --client client1` |
-| 03:30 | dbt transform | `cd dbt && dbt run` |
-| 04:00 | dbt test | `cd dbt && dbt test` |
+| 01:00 | GA4 sync | `python scripts/pipeline.py --source ga4 --client client1` |
+| 01:30 | Facebook sync | `python scripts/pipeline.py --source fbads --client client1` |
+| 02:00 | PrestaShop sync | `python scripts/pipeline.py --source prestashop --client client1` |
+| 02:30 | dbt transform | `cd dbt && dbt run` |
+| 03:00 | dbt test | `cd dbt && dbt test` |
 
 ---
 
@@ -191,6 +194,9 @@ docker compose restart metabase-db
 ## Backup Procedures
 
 ### Automated Backup (Daily)
+
+> **NOTE**: Backup runs at 03:00 AFTER ETL pipeline completes.
+> ETL finishes by 02:30, backup starts at 03:00 - no overlap.
 
 ```bash
 # Backup is run via cron at 03:00

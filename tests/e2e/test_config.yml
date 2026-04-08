@@ -1,0 +1,88 @@
+# Test configuration schema for E2E pipeline verification
+# Copy this file and customize for each client/environment
+
+client_id: client1
+environment: staging
+
+# Source configuration - enable/disable specific sources
+sources:
+  ga4:
+    enabled: true
+    timeout_seconds: 600
+    expected_min_rows: 100
+    expected_max_rows: 1000000
+    retry_count: 3
+    tables:
+      - traffic
+      - events
+      - conversions
+
+  gads:
+    enabled: true
+    timeout_seconds: 600
+    expected_min_rows: 50
+    expected_max_rows: 500000
+    retry_count: 3
+    tables:
+      - campaigns
+      - ad_groups
+      - ads
+      - keywords
+
+  fbads:
+    enabled: true
+    timeout_seconds: 600
+    expected_min_rows: 50
+    expected_max_rows: 500000
+    retry_count: 3
+    tables:
+      - campaigns
+      - ad_sets
+      - ads
+      - insights
+
+  prestashop:
+    enabled: true
+    timeout_seconds: 300
+    expected_min_rows: 10
+    expected_max_rows: 100000
+    retry_count: 2
+    tables:
+      - orders
+      - customers
+      - products
+
+# Timeout configuration (seconds)
+timeouts:
+  dlt_sync: 600
+  dbt_run: 900
+  dbt_test: 300
+  data_quality_check: 120
+
+# Data quality thresholds
+data_quality:
+  # Maximum percentage of null values allowed per column
+  null_threshold_percent: 5.0
+
+  # Maximum data age in hours
+  freshness_hours: 48
+
+  # Maximum percentage of duplicate records
+  duplicate_threshold_percent: 1.0
+
+  # Whether to check referential integrity between tables
+  referential_integrity_check: true
+
+# Cleanup and rollback settings
+cleanup:
+  # Whether to run cleanup after tests
+  enabled: true
+
+  # Whether to preserve test data for debugging
+  preserve_test_data: false
+
+  # Whether to rollback changes on test failure
+  rollback_on_failure: true
+
+  # How long to retain temp data (hours)
+  temp_data_retention_hours: 24
