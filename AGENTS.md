@@ -429,3 +429,59 @@ logger.task_start("task-123", "code_generation")
 logger.task_complete("task-123", "code_generation", 1500)
 logger.error("Something failed", error_type="ValueError")
 ```
+
+## HTTP Client Best Practices
+
+This project uses both `requests` and `httpx` for HTTP operations.
+
+### When to Use Each
+
+| Library | Use Case | Examples |
+|---------|----------|----------|
+| `requests` | Synchronous ETL, simple API calls, dlt pipeline | Prefect workflows, Metabase API, monitoring scripts |
+| `httpx` | Async operations, concurrent requests, modern SDKs | LangGraph observability pipeline, Agent logging to Loki |
+
+### Why Both?
+
+- **`requests`**: Battle-tested, massive ecosystem (285M downloads/month), compatible with dlt/pandas, simple sync API
+- **`httpx`**: Native async/await, HTTP/2 support, 5-10x faster for concurrent requests, modern AI SDKs (OpenAI, Anthropic, HuggingFace)
+
+### Performance Considerations
+
+```
+1000 concurrent requests:
+- requests (sequential): ~102s
+- httpx async: ~18s (5.6x faster)
+- httpx async + HTTP/2: ~10s (10x faster)
+
+Memory for 10k requests:
+- requests: ~120MB
+- httpx: ~245MB (2x more)
+```
+
+### Industry Trends
+
+- **Modern AI/ML SDKs** (OpenAI, Anthropic, HuggingFace v1.0+) use httpx
+- **FastAPI** recommends httpx for async outgoing requests
+- **requests** is in maintenance mode - no new features planned, but stable
+
+### Import Guidelines
+
+```python
+# Synchronous scripts (requests)
+import requests
+
+# Async scripts (httpx)
+import httpx
+
+# Async contexts
+async with httpx.AsyncClient() as client:
+    response = await client.get(url)
+```
+
+### Testing
+
+| Library | Mock Tool |
+|---------|-----------|
+| `requests` | `responses` or `requests-mock` |
+| `httpx` | `pytest-httpx` or `respx` |
