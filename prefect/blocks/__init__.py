@@ -3,9 +3,9 @@ Prefect blocks configuration for storing credentials and settings.
 Uses Prefect 3.x block system for secure credential management.
 """
 
-import os
-from pathlib import Path
+import json
 import subprocess
+from pathlib import Path
 
 PROJECT_ROOT = Path("/var/www/meta.expc.cz")
 
@@ -51,8 +51,6 @@ def create_client_config_block(client_id: str):
                 config[key.strip()] = value.strip()
 
     # Store as JSON block using CLI
-    import json
-
     config_json = json.dumps(config)
     subprocess.run(
         [

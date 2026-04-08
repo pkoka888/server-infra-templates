@@ -13,17 +13,17 @@ Usage:
     from langgraph_etl import validate_client, extract_data, load_data
 """
 
-import os
 import logging
-from typing import TypedDict, Optional
+import os
 from datetime import datetime
+from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
 # Check if LangGraph is available
 try:
-    from langgraph.graph import StateGraph, END
     from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph import END, StateGraph
 
     LANGGRAPH_AVAILABLE = True
 except ImportError:
@@ -37,11 +37,11 @@ class ETLState(TypedDict):
 
     client_id: str
     sources: list[str]
-    current_source: Optional[str]
+    current_source: str | None
     results: dict
     errors: list[dict]
-    started_at: Optional[str]
-    completed_at: Optional[str]
+    started_at: str | None
+    completed_at: str | None
     status: str  # "pending", "running", "completed", "failed"
 
 

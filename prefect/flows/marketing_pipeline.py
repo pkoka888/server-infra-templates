@@ -8,35 +8,16 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-try:
-    from prefect import flow, task, get_run_logger
-    from prefect.utilities.math import exponential_backoff
-except ImportError:
-    # Fallback for when Prefect is not installed
-    def flow(*args, **kwargs):
-        def decorator(f):
-            return f
+from prefect import flow, get_run_logger, task
 
-        if args and callable(args[0]):
-            return args[0]
-        return decorator
 
-    def task(*args, **kwargs):
-        def decorator(f):
-            return f
+def exponential_backoff(backoff_factor: float = 2):
+    """Calculate exponential backoff delay for retries."""
 
-        if args and callable(args[0]):
-            return args[0]
-        return decorator
+    def backoff_func(retries: int) -> float:
+        return backoff_factor**retries
 
-    def get_run_logger():
-        return logging.getLogger(__name__)
-
-    def exponential_backoff(backoff_factor: float = 2):
-        def backoff_func(retries: int) -> float:
-            return backoff_factor**retries
-
-        return backoff_func
+    return backoff_func
 
 
 logging.basicConfig(level=logging.INFO)

@@ -22,13 +22,11 @@ Exit Codes:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import IntEnum
 from pathlib import Path
 from typing import Any
@@ -169,7 +167,6 @@ class PrefectCronBridge:
         """Get deployment ID for a flow."""
         url = urljoin(self.config.api_url, "/deployments/filter")
 
-        search_name = deployment_name or flow_name
         payload = {"flows": {"name": {"any_": [flow_name]}}}
 
         try:

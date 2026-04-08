@@ -11,15 +11,13 @@ Usage:
     python pipeline.py --all --client CLIENT_ID
 """
 
-import os
-import sys
 import argparse
 import logging
-from pathlib import Path
+import os
 from datetime import datetime
+from pathlib import Path
 
 import dlt
-from dlt import secrets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -150,7 +148,7 @@ def run_gads_pipeline(client_id: str, credentials: dict) -> dlt.Pipeline:
 
 def run_fbads_pipeline(client_id: str, credentials: dict) -> dlt.Pipeline:
     """Run Facebook Ads pipeline using dlt verified source."""
-    from facebook_ads import facebook_ads_source, facebook_insights_source
+    from facebook_ads import facebook_ads_source
 
     dataset_name = f"fbads_{client_id}"
 

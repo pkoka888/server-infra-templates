@@ -35,11 +35,10 @@ logger = logging.getLogger("deployment_wiring")
 
 # Try to import Prefect, provide fallback for environments without it
 try:
+    from prefect.schedules import CronSchedule
+
     from prefect import flow, task
     from prefect.deployments import Deployment
-    from prefect.schedules import CronSchedule
-    from prefect.client.schemas.schedules import IntervalSchedule
-    from prefect.exceptions import PrefectException
 
     PREFECT_AVAILABLE = True
 except ImportError:

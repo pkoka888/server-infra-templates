@@ -6,7 +6,6 @@ Uses Prefect 3.x deployment patterns with Python API.
 """
 
 import argparse
-import sys
 from pathlib import Path
 
 import yaml
@@ -37,7 +36,6 @@ def create_deployment_yaml(client_id: str, sources: list[str]):
 
 def deploy_via_api(client_id: str, sources: list[str], api_url: str):
     """Deploy using Prefect REST API."""
-    import requests
 
     deployment = create_deployment_yaml(client_id, sources)
     deployment["path"] = str(PROJECT_ROOT / "prefect" / "flows")

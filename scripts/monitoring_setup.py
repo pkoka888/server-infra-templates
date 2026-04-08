@@ -25,7 +25,7 @@ import logging
 import os
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import IntEnum
 from pathlib import Path
@@ -441,7 +441,7 @@ Examples:
     try:
         if args.check:
             health = monitor.check_flow_health(args.flow)
-            print(f"Health Status:")
+            print("Health Status:")
             print(f"  Total: {health['total']}")
             print(f"  Completed: {health['completed']}")
             print(f"  Failed: {health['failed']}")

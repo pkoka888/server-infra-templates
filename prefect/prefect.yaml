@@ -1,32 +1,22 @@
-prefect-version': 3.0.0
-build:
-- prefect-docker/docker:
-    image: prefecthq/prefect:3-latest
-    context: .
-push:
-- prefect-docker/docker:
-    image: prefecthq/prefect:3-meta-expccz:latest
-    context: .
-pull:
-- prefect-gcp/gcr:
-    repository: prefecthq
-    tag: 3-latest
+prefect-version: 3.0.0
+
 deployments:
-- name: marketing-analytics-{client_id}
-  work_pool:
-    name: docker-pool
-  flow_location: ./prefect/flows/marketing_pipeline.py
-  entrypoint: marketing_pipeline:marketing_analytics_pipeline
-  parameters:
-    client_id: '{client_id}'
-    sources:
-    - ga4
-    - gads
-    - fbads
-    - prestashop
-  schedule:
-    cron: 0 1 * * *
-    timezone: Europe/Prague
-  tags:
-  - marketing
-  - etl
+  - name: marketing-analytics-client1
+    work_pool:
+      name: docker-pool
+    flow_location: ./prefect/flows/marketing_pipeline.py
+    entrypoint: prefect/flows/marketing_pipeline.py:marketing_analytics_pipeline
+    parameters:
+      client_id: client1
+      sources:
+        - ga4
+        - gads
+        - fbads
+        - prestashop
+    schedule:
+      cron: 0 1 * * *
+      timezone: Europe/Prague
+    tags:
+      - marketing
+      - etl
+      - client1

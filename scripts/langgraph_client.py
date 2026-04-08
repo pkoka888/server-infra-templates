@@ -3,9 +3,9 @@ LangGraph client for Metabase pipeline integration.
 Provides utilities to call LangGraph workflows from pipeline scripts.
 """
 
-import os
 import logging
-from typing import Optional
+import os
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ class LangGraphClient:
             return {"status": "error", "message": str(e)}
 
 
-def get_langgraph_client() -> Optional[LangGraphClient]:
+def get_langgraph_client() -> LangGraphClient | None:
     """Get LangGraph client if available."""
     client = LangGraphClient()
     if client.health_check():

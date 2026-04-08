@@ -110,7 +110,7 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:4200:4200"
-    command: /bin/bash -c "prefect config set PREFECT_API_URL=http://localhost:4200/api && prefect server start --host 0.0.0.0"
+    command: /bin/bash -c "apt-get update && apt-get install -y curl && prefect config set PREFECT_API_URL=http://localhost:4200/api && prefect server start --host 0.0.0.0"
     environment:
       PREFECT_HOME: /data
       PREFECT_SERVER_API_HOST: 0.0.0.0
@@ -118,11 +118,11 @@ services:
     volumes:
       - prefect-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4200/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:4200/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
     deploy:
       resources:
         limits:
