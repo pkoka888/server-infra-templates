@@ -7,174 +7,17 @@ positions:
 
 clients:
   - url: http://100.91.164.109:3100/loki/api/v1/push
-    # Uncomment for auth:
-    # basic_auth:
-    #   username: user
-    #   password: pass
 
 scrape_configs:
-  # ============================================
-  # Docker Container Logs
-  # ============================================
-  - job_name: docker-containers
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
-        refresh_interval: 5s
-        filters:
-          - name: label
-            values:
-              - com.docker.compose.service
-    relabel_configs:
-      # Extract container name
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/?(.*)'
-        target_label: container
-      
-      # Extract service name from docker compose labels
-      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
-        regex: '(.*)'
-        target_label: service
-      
-      # Extract project from docker compose
-      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
-        regex: '(.*)'
-        target_label: compose_project
-      
-      # Extract environment
-      - source_labels: ['__meta_docker_container_label_environment']
-        regex: '(.*)'
-        target_label: environment
-      
-      # Use container name as job label
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/?(.*)'
-        target_label: job
-      
-      # Drop internal docker containers
-      - action: drop
-        source_labels: ['__meta_docker_container_name']
-        regex: '/(promtail|docker-compose|alertmanager)'
-    
-    pipeline_stages:
-      - json:
-          expressions:
-            timestamp: time
-            message: msg
-            level: level
-            service: service
-            log_type: type
-      
-      - regex:
-          expression: '^(?P<level>\w+)\s+(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s]*)\s+(?P<message>.*)$'
-          vars:
-            level: [output]
-            timestamp: [output]
-            message: [output]
-      
-      - labels:
-          level:
-          service:
-          container:
-          environment:
-      
-      - timestamp:
-          source: timestamp
-          format: RFC3339Nano
-      
-      - output:
-          source: message
-
-  # ============================================
-  # AI Agent Logs (Kilo, OpenCode, etc.)
-  # ============================================
-  - job_name: ai-agents
+  - job_name: system
     static_configs:
       - targets:
           - localhost
         labels:
-          job: ai-agent
-          type: agentic
-        # Path patterns for agent logs
-        # Adjust these paths based on your setup
-        __path__: |
-          /var/log/kilo/*.log
-          /var/log/opencode/*.log
-          /home/*/.kilo/logs/*.log
-          /home/*/.opencode/logs/*.log
-    
-    pipeline_stages:
-      - json:
-          expressions:
-            timestamp: timestamp
-            level: level
-            agent: agent
-            event: event
-            task_id: task_id
-            duration_ms: duration_ms
-            error_type: error_type
-      
-      - labels:
-          level:
-          agent:
-          event:
-      
-      - timestamp:
-          source: timestamp
-          format: RFC3339Nano
-      
-      - output:
-          source: message
+          job: varlogs
+          host: expc-cz
+          __path__: /var/log/syslog
 
-  # ============================================
-  # System Logs
-  # ============================================
-  - job_name: system-logs
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: system
-          type: syslog
-        __path__: /var/log/syslog
-    pipeline_stages:
-      - syslog:
-          listen_address: tcp://localhost:1514
-          listen_protocol: syslog
-      - labels:
-          hostname: __syslog_hostname
-          appname: __syslog_program
-
-  # ============================================
-  # Application Logs (Generic)
-  # ============================================
-  - job_name: application-logs
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: application
-        __path__: /var/log/app/*.log
-    pipeline_stages:
-      - json:
-          expressions:
-            timestamp: ts
-            message: msg
-            level: level
-            context: context
-      
-      - labels:
-          level:
-      
-      - timestamp:
-          source: timestamp
-          format: RFC3339
-      
-      - output:
-          source: message
-
-  # ============================================
-  # Nginx Access Logs
-  # ============================================
   - job_name: nginx-access
     static_configs:
       - targets:
@@ -182,25 +25,8 @@ scrape_configs:
         labels:
           job: nginx-access
           type: access
-        __path__: /var/log/nginx/access.log
-    pipeline_stages:
-      - regex:
-          expression: '^(?P<ip>\S+)\s+-\s+\S+\s+\[(?P<timestamp>[^\]]+)\]\s+"(?P<request>[^"]*)"\s+(?P<status>\d{3})\s+(?P<body_bytes>\d+)\s+"(?P<referer>[^"]*)"\s+"(?P<user_agent>[^"]*)"'
-      
-      - labels:
-          ip:
-          status:
-      
-      - timestamp:
-          source: timestamp
-          format: '%d/%b/%Y:%H:%M:%S %z'
-      
-      - output:
-          source: request
+          __path__: /var/log/nginx/access.log
 
-  # ============================================
-  # Error Logs
-  # ============================================
   - job_name: nginx-error
     static_configs:
       - targets:
@@ -208,27 +34,28 @@ scrape_configs:
         labels:
           job: nginx-error
           type: error
-        __path__: /var/log/nginx/error.log
-    pipeline_stages:
-      - regex:
-          expression: '^(?P<timestamp>\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+\[(?P<level>\w+)\]\s+(?P<pid>\d+)#(?P<tid>\d+):\s+(?P<message>.*)$'
-      
-      - labels:
-          level:
-          pid:
-      
-      - timestamp:
-          source: timestamp
-          format: '%Y/%m/%d %H:%M:%S'
-      
-      - output:
-          source: message
+          __path__: /var/log/nginx/error.log
 
-# ============================================
-# Global Limits
-# ============================================
-limits_config:
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
-  ingestion_rate_mb: 50
-  ingestion_burst_size_mb: 100
+  - job_name: auth-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          type: security
+          __path__: /var/log/auth.log
+
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: container
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/?(.*)'
+        target_label: job
+      - action: drop
+        source_labels: ['__meta_docker_container_name']
+        regex: '/promtail'
