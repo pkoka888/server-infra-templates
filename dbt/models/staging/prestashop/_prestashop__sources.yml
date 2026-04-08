@@ -1,0 +1,46 @@
+version: 2
+
+sources:
+  - name: prestashop_raw
+    database: metabase
+    schema: "prestashop_{{ var('client_id') }}"
+    freshness:
+      warn_after: {count: 1, period: hour}
+      error_after: {count: 2, period: hours}
+    loaded_at_field: "date_add"
+
+    tables:
+      - name: orders
+        description: "PrestaShop orders from dlt pipeline"
+        freshness:
+          warn_after: {count: 30, period: minute}
+          error_after: {count: 1, period: hour}
+        loaded_at_field: "date_add"
+        columns:
+          - name: id_order
+            description: "Primary key for orders"
+            tests:
+              - unique
+              - not_null
+
+      - name: customers
+        description: "PrestaShop customers from dlt pipeline"
+        columns:
+          - name: id_customer
+            description: "Primary key for customers"
+            tests:
+              - unique
+              - not_null
+          - name: email
+            description: "Customer email address"
+            tests:
+              - not_null
+
+      - name: products
+        description: "PrestaShop products from dlt pipeline"
+        columns:
+          - name: id_product
+            description: "Primary key for products"
+            tests:
+              - unique
+              - not_null

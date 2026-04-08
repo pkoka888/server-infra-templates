@@ -12,6 +12,9 @@ dependencies = [
     "litellm>=1.40.0",
     # LangGraph for ETL orchestration
     "langgraph>=1.0.0",
+    # Prefect for workflow orchestration
+    "prefect>=3.0.0",
+    "prefect-dbt>=0.5.0",
 ]
 
 [dependency-groups]

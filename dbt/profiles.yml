@@ -1,0 +1,12 @@
+marketing_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: metabase-db
+      port: 5432
+      user: metabase
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      database: metabase
+      schema: staging
+      threads: 4

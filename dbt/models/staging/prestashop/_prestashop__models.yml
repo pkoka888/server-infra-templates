@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: stg_prestashop__orders
+    description: "Staging model for PrestaShop orders with data quality validations"
+    columns:
+      - name: order_id
+        description: "Primary key for orders - must be unique and not null"
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+      - name: customer_id
+        description: "Foreign key to customers"
+        tests:
+          - not_null:
+              severity: warn
+          - relationships:
+              to: source('prestashop_raw', 'customers')
+              field: id_customer
+              severity: warn
+
+      - name: total_paid
+        description: "Total amount paid including shipping - must be non-negative"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              row_condition: "total_paid IS NOT NULL"
+              strictly: false
+              severity: error
+
+      - name: total_products
+        description: "Total products amount - must be non-negative"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              row_condition: "total_products IS NOT NULL"
+              strictly: false
+              severity: warn
+
+      - name: total_shipping
+        description: "Total shipping amount - must be non-negative"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              row_condition: "total_shipping IS NOT NULL"
+              strictly: false
+              severity: warn
+
+      - name: created_at
+        description: "Order creation timestamp - must not be null and in reasonable range"
+        tests:
+          - not_null:
+              severity: error
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "'2020-01-01'"
+              max_value: "CURRENT_DATE + INTERVAL '1 DAY'"
+              severity: warn
+
+      - name: status_id
+        description: "Order status ID"
+
+    tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1
+          severity: warn
+          description: "Orders table should not be empty"

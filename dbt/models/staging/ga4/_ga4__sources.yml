@@ -1,0 +1,55 @@
+version: 2
+
+sources:
+  - name: ga4_raw
+    database: metabase
+    schema: "ga4_{{ var('client_id') }}"
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    loaded_at_field: "_dlt_load_time"
+
+    tables:
+      - name: traffic
+        description: "GA4 traffic data from dlt pipeline"
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}
+        loaded_at_field: "_dlt_load_time"
+
+      - name: events
+        description: "GA4 events data from dlt pipeline with quality validations"
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}
+        loaded_at_field: "_dlt_load_time"
+        columns:
+          - name: event_date
+            description: "Date of the event - must not be null and in valid format"
+            tests:
+              - not_null:
+                  severity: error
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  regex: "^[0-9]{4}[0-9]{2}[0-9]{2}$"
+                  severity: warn
+
+          - name: event_timestamp
+            description: "Timestamp of the event"
+
+          - name: event_name
+            description: "Name of the event"
+            tests:
+              - not_null:
+                  severity: error
+
+          - name: session_id
+            description: "GA4 session identifier - must not be null"
+            tests:
+              - not_null:
+                  severity: error
+
+          - name: user_pseudo_id
+            description: "Anonymous user identifier"
+            tests:
+              - not_null:
+                  severity: warn

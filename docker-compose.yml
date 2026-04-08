@@ -82,8 +82,88 @@ services:
     networks:
       - metabase-net
 
+  dbt:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+    container_name: dbt
+    restart: unless-stopped
+    profiles: ["dbt"]
+    environment:
+      DBT_PROFILES_DIR: /usr/app/dbt
+    volumes:
+      - ./dbt:/usr/app/dbt
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - metabase-net
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4200:4200"
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_HOME: /data
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+    volumes:
+      - prefect-data:/data
+    healthcheck:
+      test: ["CMD", "prefect", "server", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - metabase-net
+
+  prefect-worker:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-worker
+    restart: unless-stopped
+    command: prefect worker start --pool docker --type docker
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_SERVER_ALLOW_EPHEMERAL_MODE: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - metabase-net
+
 volumes:
   metabase-db-data:
+  prefect-data:
 
 networks:
   metabase-net:
