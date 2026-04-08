@@ -2,8 +2,15 @@
 .env
 .env.local
 .env.*
+.env.client*
 !.env.example
 users-tasks.md
+
+# Secrets (SOPS/Ansible Vault)
+secrets/
+*.vault_pass
+*.enc
+ansible/group_vars/all/vault.yml
 
 # Logs
 *.log

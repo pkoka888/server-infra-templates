@@ -1,0 +1,26 @@
+---
+# Ansible Playbook: Backup Metabase Database
+
+- name: Backup Metabase Database
+  hosts: metabase_servers
+  become: false
+  vars_files:
+    - group_vars/all/vault.yml
+
+  tasks:
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: /var/www/meta.expc.cz/backups
+        state: directory
+        mode: '0755'
+
+    - name: Run backup script
+      ansible.builtin.script:
+        cmd: /var/www/meta.expc.cz/scripts/backup-metabase.sh
+      environment:
+        BORG_PASSPHRASE: "{{ vault_borg_passphrase }}"
+      register: backup_result
+
+    - name: Display backup result
+      ansible.builtin.debug:
+        var: backup_result.stdout_lines

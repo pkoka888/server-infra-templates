@@ -1,0 +1,35 @@
+---
+# Vault secrets - ENCRYPTED WITH ANSIBLE-VAULT
+# Edit with: ansible-vault edit ansible/group_vars/all/vault.yml
+
+# PostgreSQL
+vault_postgres_user: metabase
+vault_postgres_password: CHANGE_ME
+vault_postgres_db: metabase
+
+# Metabase
+vault_mb_db_user: "{{ vault_postgres_user }}"
+vault_mb_db_pass: "{{ vault_postgres_password }}"
+
+# Client 1 - GA4
+vault_client1_ga4_property_id: "123456789"
+vault_client1_ga4_client_id: CHANGE_ME.apps.googleusercontent.com
+vault_client1_ga4_client_secret: CHANGE_ME
+vault_client1_ga4_refresh_token: CHANGE_ME
+
+# Client 1 - Facebook Ads
+vault_client1_fb_ad_account_id: act_123456
+vault_client1_fb_access_token: CHANGE_ME
+
+# Client 1 - Google Ads
+vault_client1_gads_customer_id: "1234567890"
+vault_client1_gads_developer_token: CHANGE_ME
+vault_client1_gads_client_id: CHANGE_ME.apps.googleusercontent.com
+vault_client1_gads_client_secret: CHANGE_ME
+
+# Client 1 - PrestaShop
+vault_client1_ps_shop_url: https://shop.example.com
+vault_client1_ps_api_key: CHANGE_ME
+
+# Borg Backup
+vault_borg_passphrase: CHANGE_ME

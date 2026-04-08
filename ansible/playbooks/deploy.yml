@@ -1,0 +1,66 @@
+---
+# Ansible Playbook: Deploy Marketing Analytics Platform
+
+- name: Deploy Marketing Analytics Platform
+  hosts: metabase_servers
+  become: true
+  vars_files:
+    - group_vars/all/vault.yml
+
+  tasks:
+    - name: Ensure Docker is installed
+      ansible.builtin.package:
+        name:
+          - docker.io
+          - docker-compose
+        state: present
+
+    - name: Ensure Docker service is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: /var/www/meta.expc.cz
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: '0755'
+
+    - name: Copy docker-compose.yml
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: /var/www/meta.expc.cz/docker-compose.yml
+        mode: '0644'
+      notify: Restart containers
+
+    - name: Create .env file from vault
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: /var/www/meta.expc.cz/.env
+        mode: '0600'
+      notify: Restart containers
+
+    - name: Pull Docker images
+      community.docker.docker_image:
+        name: "{{ item.image }}"
+        tag: "{{ item.tag | default('latest') }}"
+        source: pull
+      loop:
+        - { image: 'metabase/metabase', tag: 'v0.59.5' }
+        - { image: 'postgres', tag: '17-alpine' }
+        - { image: 'prefecthq/prefect', tag: '3-latest' }
+        - { image: 'ghcr.io/dbt-labs/dbt-postgres', tag: '1.9.latest' }
+
+    - name: Start containers
+      community.docker.docker_compose_v2:
+        project_src: /var/www/meta.expc.cz
+        state: present
+        pull: true
+
+  handlers:
+    - name: Restart containers
+      community.docker.docker_compose_v2:
+        project_src: /var/www/meta.expc.cz
+        state: restarted
