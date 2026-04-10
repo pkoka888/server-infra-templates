@@ -1,9 +1,12 @@
+{{ config(materialized="view", schema="staging", tags=["staging"]) }}
+
 with source as (
     select * from {{ source('ga4_raw', 'traffic') }}
 ),
 
 renamed as (
     select
+        {{ dbt_utils.generate_surrogate_key(['date', 'source', 'medium', 'device_category']) }} as traffic_id,
         date,
         sessions,
         total_users,

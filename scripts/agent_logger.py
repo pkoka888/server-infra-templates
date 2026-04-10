@@ -5,12 +5,11 @@ Standardized logging for AI agents (Kilo, OpenCode, etc.)
 Compatible with Loki, Grafana, and LangGraph pipeline.
 """
 
-import os
 import json
 import logging
+import os
 import traceback
 from datetime import datetime
-from typing import Any
 from pathlib import Path
 
 try:

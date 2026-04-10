@@ -4,11 +4,37 @@ Orchestrates dlt syncs → dbt models → dbt tests.
 """
 
 import logging
+import os
 import subprocess
+import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from prefect import flow, get_run_logger, task
+
+
+@lru_cache
+def get_project_paths() -> dict[str, Path]:
+    """Get project paths, caching for performance."""
+    if os.path.exists("/var/www/meta.expc.cz"):
+        project_root = Path("/var/www/meta.expc.cz")
+    elif os.path.exists("/workspace"):
+        project_root = Path("/workspace")
+    else:
+        project_root = Path(__file__).parent.parent.parent
+
+    return {
+        "root": project_root,
+        "dbt": project_root / "dbt",
+        "dbt_binary": project_root / ".venv" / "bin" / "dbt",
+        "profiles": Path.home() / ".dbt",
+        "pipeline": project_root / "scripts" / "pipeline.py",
+        "python": Path(sys.executable),
+    }
+
+
+PROJECT_PATHS = get_project_paths()
 
 
 def exponential_backoff(backoff_factor: float = 2):
@@ -22,30 +48,12 @@ def exponential_backoff(backoff_factor: float = 2):
 
 logging.basicConfig(level=logging.INFO)
 
-# Constants - auto-detect environment
-import os
-
-import sys
-
-if os.path.exists("/var/www/meta.expc.cz"):
-    PROJECT_ROOT = Path("/var/www/meta.expc.cz")
-elif os.path.exists("/workspace"):
-    PROJECT_ROOT = Path("/workspace")
-else:
-    PROJECT_ROOT = Path(__file__).parent.parent.parent
-
-PYTHON_BINARY = Path(sys.executable)
-DBT_PROJECT_DIR = PROJECT_ROOT / "dbt"
-DBT_BINARY = PROJECT_ROOT / ".venv" / "bin" / "dbt"
-DBT_PROFILES_DIR = Path.home() / ".dbt"
-PIPELINE_SCRIPT = PROJECT_ROOT / "scripts" / "pipeline.py"
-
 
 @task(
     retries=3,
     retry_delay_seconds=exponential_backoff(backoff_factor=2),
     retry_jitter_factor=0.3,
-    timeout_seconds=600,  # 10 min for dlt sync
+    timeout_seconds=600,
 )
 def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
     """
@@ -62,8 +70,8 @@ def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
     logger.info(f"Starting dlt sync: {source_name} for client {client_id}")
 
     cmd = [
-        str(PYTHON_BINARY),
-        str(PIPELINE_SCRIPT),
+        str(PROJECT_PATHS["python"]),
+        str(PROJECT_PATHS["pipeline"]),
         "--source",
         source_name,
         "--client",
@@ -76,7 +84,7 @@ def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
-            cwd=str(PROJECT_ROOT),
+            cwd=str(PROJECT_PATHS["root"]),
         )
         logger.info(f"dlt sync {source_name} completed successfully")
         return {
@@ -95,29 +103,29 @@ def run_dlt_sync(source_name: str, client_id: str) -> dict[str, Any]:
     retries=2,
     retry_delay_seconds=exponential_backoff(backoff_factor=2),
     retry_jitter_factor=0.3,
-    timeout_seconds=900,  # 15 min for dbt run
+    timeout_seconds=900,
 )
-def run_dbt_models(project_dir: Path, models: str | None = None) -> dict[str, Any]:
+def run_dbt_models(models: str | None = None) -> dict[str, Any]:
     """
     Run dbt models.
 
     Args:
-        project_dir: Path to dbt project directory
         models: Optional model selector (e.g., '+my_model')
 
     Returns:
         Dict with execution results
     """
     logger = get_run_logger()
-    logger.info(f"Running dbt models in {project_dir}")
+    dbt_dir = PROJECT_PATHS["dbt"]
+    logger.info(f"Running dbt models in {dbt_dir}")
 
     cmd = [
-        str(DBT_BINARY),
+        str(PROJECT_PATHS["dbt_binary"]),
         "run",
         "--project-dir",
-        str(project_dir),
+        str(dbt_dir),
         "--profiles-dir",
-        str(DBT_PROFILES_DIR),
+        str(PROJECT_PATHS["profiles"]),
     ]
     if models:
         cmd.extend(["--select", models])
@@ -128,7 +136,7 @@ def run_dbt_models(project_dir: Path, models: str | None = None) -> dict[str, An
             capture_output=True,
             text=True,
             check=True,
-            cwd=str(project_dir),
+            cwd=str(dbt_dir),
             env={**os.environ, "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "")},
         )
         logger.info("dbt run completed successfully")
@@ -146,28 +154,26 @@ def run_dbt_models(project_dir: Path, models: str | None = None) -> dict[str, An
     retries=1,
     retry_delay_seconds=exponential_backoff(backoff_factor=2),
     retry_jitter_factor=0.3,
-    timeout_seconds=300,  # 5 min for dbt test
+    timeout_seconds=300,
 )
-def run_dbt_tests(project_dir: Path) -> dict[str, Any]:
+def run_dbt_tests() -> dict[str, Any]:
     """
     Run dbt tests for all models.
-
-    Args:
-        project_dir: Path to dbt project directory
 
     Returns:
         Dict with execution results
     """
     logger = get_run_logger()
-    logger.info(f"Running dbt tests in {project_dir}")
+    dbt_dir = PROJECT_PATHS["dbt"]
+    logger.info(f"Running dbt tests in {dbt_dir}")
 
     cmd = [
-        str(DBT_BINARY),
+        str(PROJECT_PATHS["dbt_binary"]),
         "test",
         "--project-dir",
-        str(project_dir),
+        str(dbt_dir),
         "--profiles-dir",
-        str(DBT_PROFILES_DIR),
+        str(PROJECT_PATHS["profiles"]),
     ]
 
     try:
@@ -176,7 +182,7 @@ def run_dbt_tests(project_dir: Path) -> dict[str, Any]:
             capture_output=True,
             text=True,
             check=True,
-            cwd=str(project_dir),
+            cwd=str(dbt_dir),
             env={**os.environ, "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "")},
         )
         logger.info("dbt test completed successfully")
@@ -231,11 +237,11 @@ def marketing_analytics_pipeline(
 
     # Phase 2: Run dbt models (depends on all syncs)
     logger.info("Phase 2: Running dbt models")
-    dbt_run_result = run_dbt_models(DBT_PROJECT_DIR, dbt_models)
+    dbt_run_result = run_dbt_models(dbt_models)
 
     # Phase 3: Run dbt tests (depends on dbt models)
     logger.info("Phase 3: Running dbt tests")
-    dbt_test_result = run_dbt_tests(DBT_PROJECT_DIR)
+    dbt_test_result = run_dbt_tests()
 
     # Compile results
     results = {

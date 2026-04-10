@@ -4,244 +4,37 @@
 
 BI/analytics dashboard for PrestaShop e-commerce. Connects to OpenProject (PostgreSQL), research data (SQLite), and Prometheus metrics. Provides dashboards for infrastructure health, project metrics, research pipeline, and client delivery.
 
-## Instance
+## Build / Lint / Test Commands
 
-| Property | Value |
-|----------|-------|
-| URL | https://metabase.expc.cz |
-| Port | 8096 (internal) |
-| DB | PostgreSQL 17 |
-| Version | v0.59.5 |
-| Server | s60 (Docker) |
-
-## Essential Commands
+### Python (Primary)
 
 ```bash
-# Deploy/update
-docker compose up -d
-docker compose pull
+# Activate virtual environment
+source .venv/bin/activate
 
-# Health checks
-docker inspect --format='{{.State.Health.Status}}' metabase
-docker inspect --format='{{.State.Health.Status}}' metabase-db
-docker exec metabase curl -sf http://localhost:3000/api/health
-
-# Logs
-docker logs metabase --tail 100
-
-# Database access
-docker exec metabase-db psql -U metabase -d metabase
-```
-
-## Backup
-
-```bash
-/var/www/metabase/scripts/backup-metabase.sh
-
-# List backups
-export BORG_PASSPHRASE="$(cat ~/.config/borg/metabase-passphrase)"
-borg list ssh://pavel@100.91.164.109/var/backups/borg/metabase
-```
-
-## Query Utilities
-
-```bash
-# Dashboard count
-docker exec metabase-db psql -U metabase -d metabase -c "SELECT count(*) FROM report_dashboard;"
-
-# Slow queries (requires pg_stat_statements extension)
-docker exec metabase-db psql -U metabase -d metabase -c "
-SELECT query, calls, total_time/calls as avg_time
-FROM pg_stat_statements ORDER BY avg_time DESC LIMIT 10;"
-```
-
-## Non-Obvious Points
-
-- **Credentials**: Stored in `.env` (never committed)
-- **Timezone**: Europe/Prague (JAVA_TIMEZONE and TZ)
-- **DB waits for health**: `depends_on` with `service_healthy` condition
-- **Borg passphrase**: Located at `~/.config/borg/metabase-passphrase`
-
-## Policy References
-
-- `.agent/agents.md` — Agent behavior for Metabase
-- `.agent/constitution/rules.md` — Hard guards and pipeline rules
-- `.agent/constitution/embedding-policy.md` — Dashboard embedding rules
-- `.agent/constitution/database-policy.md` — PostgreSQL config
-- `.agent/skills/metabase-pipeline/SKILL.md` — Pipeline operations
-- `.agent/workflows/init-workflow.md` — Initialization steps
-
-## Data Sources Integration
-
-Multi-client ETL pipeline using **dlt** (Apache-2.0) - no Docker required, Python-only.
-
-### Architecture
-
-```
-Client APIs (GA4, G-Ads, FB-Ads, PrestaShop, SEO)
-           │
-           ▼
-    ┌──────────────┐
-    │ dlt pipeline │  scripts/pipeline.py
-    └──────┬───────┘
-           │
-           ▼
-    PostgreSQL (isolated datasets per client)
-           │
-           ▼
-       Metabase
-```
-
-### Quick Start
-
-```bash
-# 1. Setup new client
-./scripts/setup-pipeline.sh client_name
-
-# 2. Edit .env.client_name with credentials
-#    - GA4: property_id, client_id, client_secret, refresh_token
-#    - G-Ads: developer_token, customer_id, OAuth credentials
-#    - FB-Ads: ad_account_id, access_token
-#    - PrestaShop: shop_url, api_key
-#    - SEO: GSC, Ahrefs, SEMrush API keys
-
-# 3. Run pipeline
-python scripts/pipeline.py --all --client client_name
-```
-
-### Per-Client Variables
-
-Create `.env.client_name` for each client:
-
-```
-CLIENT_ID=client1
-GA4_PROPERTY_ID=123456789
-GA4_CLIENT_ID=xxx.apps.googleusercontent.com
-GA4_CLIENT_SECRET=
-GA4_REFRESH_TOKEN=
-GADS_CUSTOMER_ID=1234567890
-GADS_DEVELOPER_TOKEN=
-FB_AD_ACCOUNT_ID=act_123456789
-FB_ACCESS_TOKEN=
-PS_SHOP_URL=https://shop.com
-PS_API_KEY=
-```
-
-### Dataset Isolation
-
-Each client gets separate datasets:
-- `ga4_client1`, `gads_client1`, `fbads_client1`, `prestashop_client1`
-- All clients share same PostgreSQL (metabase-db)
-
-### Scheduling
-
-> **IMPORTANT**: ETL runs at 01:00-02:30 to avoid conflict with 03:00 backup window.
-
-```bash
-# crontab -e
-# Daily at 1am for each client (BEFORE backup at 3am)
-0 1 * * * cd /var/www/metabase && source .venv/bin/activate && python scripts/pipeline.py --all --client client1 >> logs/pipeline_client1.log 2>&1
-
-# Client 2 - staggered 30 min later
-30 1 * * * cd /var/www/metabase && source .venv/bin/activate && python scripts/pipeline.py --all --client client2 >> logs/pipeline_client2.log 2>&1
-
-# dbt run - after ETL completes
-30 2 * * * cd /var/www/metabase/dbt && source ../.venv/bin/activate && dbt run --target prod >> ../logs/dbt_run.log 2>&1
-
-# dbt test - after dbt run
-45 2 * * * cd /var/www/metabase/dbt && source ../.venv/bin/activate && dbt test --target prod >> ../logs/dbt_test.log 2>&1
-```
-
-### LangGraph ETL Integration
-
-For advanced ETL orchestration with checkpointing:
-
-```bash
-# Run ETL workflow with LangGraph
-uv run python scripts/langgraph_etl.py client1 ga4,gads,fbads
-
-# Test LangGraph client
-uv run python scripts/langgraph_client.py
-```
-
-**Files:**
-- `scripts/langgraph_etl.py` - In-process LangGraph ETL graph
-- `scripts/langgraph_client.py` - API client for LangGraph server
-
-### Using uv (Recommended)
-
-This project uses [uv](https://github.com/astral-sh/uv) for fast Python package management.
-
-```bash
-# Create venv and install dependencies
-uv venv .venv --python python3
-uv sync
-
-# Run pipeline (activates venv automatically)
-uv run python scripts/pipeline.py --all --client client1
-
-# Add new dependency
-uv add requests
-uv add --dev pytest
-
-# Update all packages
-uv sync --upgrade
-```
-
-### Credentials
-
-- Never commit `.env.*` files (add to `.gitignore`)
-- Shared config in `.env` (PostgreSQL connection)
-- API keys go in per-client `.env.client_name`
-
-### Available Sources
-
-| Source | Method | Verified Source |
-|--------|--------|-----------------|
-| Google Analytics 4 | dlt | `google-analytics` |
-| Google Ads | dlt | `google-ads` |
-| Facebook Ads | dlt | `facebook-ads` |
-| PrestaShop | Custom API | `requests` |
-| Google Search Console | dlt | Ready |
-| Ahrefs/SEMrush | Python | API keys |
-
-See `METABASE_DATA_SOURCES_INTEGRATION.md` for full documentation.
-
-## Python
-
-```bash
+# Run all linters (ruff + mypy)
 uv run ruff check .
 uv run mypy .
-uv run pytest
+
+# Run single test file
+uv run pytest tests/test_pipeline.py -v
+
+# Run single test function
+uv run pytest tests/test_pipeline.py::TestPipeline::test_get_client_env -v
+
+# Run tests matching pattern
+uv run pytest -k "test_api" -v
+
+# Run with coverage
+uv run pytest --cov=scripts --cov-report=term-missing
+
+# Auto-fix ruff issues
+uv run ruff check --fix .
 ```
 
-## dbt Transformations
-
-The platform uses **dbt** (data build tool) for SQL transformations with a staging → marts architecture.
-
-### Project Structure
-
-```
-dbt/
-├── dbt_project.yml           # Project configuration
-├── profiles.yml             # Database connections
-├── packages.yml             # Package dependencies
-├── macros/                  # Custom macros
-│   └── data_quality/
-│       └── _validations.sql # Shared validation macros
-└── models/
-    ├── staging/            # Source-conformed models
-    │   ├── ga4/            # stg_ga4__traffic
-    │   ├── facebook/        # stg_facebook__ads, campaigns
-    │   └── prestashop/     # stg_prestashop__orders
-    └── marts/
-        └── marketing/       # fct_marketing_performance
-```
-
-### Running dbt
+### dbt
 
 ```bash
-# Navigate to dbt directory
 cd dbt
 
 # Install dependencies
@@ -250,238 +43,286 @@ dbt deps
 # Run all models
 dbt run
 
-# Run specific client
-dbt run --vars '{"client_id": "client1"}'
+# Run specific model
+dbt run --select stg_ga4__traffic
 
 # Run tests
 dbt test
 
-# Generate documentation
-dbt docs generate
-dbt docs serve
+# Run specific test
+dbt test --select stg_ga4__traffic
+
+# Generate docs
+dbt docs generate && dbt docs serve
 ```
 
-### dbt Docker Service
+### Docker
 
 ```bash
-# Run dbt in Docker container
-docker compose run --rm dbt dbt run
+# Deploy/update
+docker compose up -d
+docker compose pull
 
-# Or with specific vars
-docker compose run --rm dbt dbt run --vars '{"client_id": "client1"}'
+# Health checks
+docker inspect --format='{{.State.Health.Status}}' metabase
+docker exec metabase curl -sf http://localhost:3000/api/health
+
+# Logs
+docker logs metabase --tail 100
 ```
 
-## Prefect Orchestration
+---
 
-**Prefect** handles workflow orchestration with scheduled pipelines and retry policies.
+## Code Style Guidelines
 
-### Architecture
+### General Principles
+
+- **Line length**: 100 characters max
+- **Python version**: 3.10+
+- **Formatter**: ruff (line-length 100, target py310)
+- **Type checker**: mypy
+
+### Imports
+
+**Organize imports in this order (ruff `I` rule will enforce):**
+
+1. Standard library (`import os`, `import logging`)
+2. Third-party (`import requests`, `import httpx`)
+3. Local application (`from scripts import pipeline`)
+
+**Use absolute imports from project root:**
+
+```python
+from scripts.agent_logger import AgentLogger  # Good
+from ..agent_logger import AgentLogger        # Avoid
+```
+
+**Conditional imports for optional dependencies:**
+
+```python
+try:
+    import httpx
+    HAS_HTTPX = True
+except ImportError:
+    HAS_HTTPX = False
+```
+
+### Type Annotations
+
+- Use `str | None` syntax (Python 3.10+ union syntax, not `Optional[str]`)
+- Use `list[str]` syntax (not `List[str]`)
+- Type all function parameters and return values when ambiguous
+- Use `TypedDict` for structured state dictionaries
+
+```python
+# Good
+def process_data(user_id: str) -> dict[str, Any] | None:
+    ...
+
+class ETLState(TypedDict):
+    client_id: str
+    sources: list[str]
+    status: str
+```
+
+### Naming Conventions
+
+| Element | Convention | Example |
+|---------|-----------|---------|
+| Variables | snake_case | `client_id`, `total_revenue` |
+| Functions | snake_case | `get_client_env()`, `extract_data()` |
+| Classes | PascalCase | `AgentLogger`, `ETLState` |
+| Constants | UPPER_SNAKE | `MAX_RETRIES`, `DEFAULT_TIMEOUT` |
+| Private vars | _leading_underscore | `_client`, `_config` |
+| Type aliases | PascalCase | `ClientConfig`, `MetricsDict` |
+
+### Error Handling
+
+**Use specific exceptions:**
+
+```python
+# Good
+raise ValueError(f"Invalid client_id: {client_id}")
+raise FileNotFoundError(f"Config not found: {env_file}")
+
+# Avoid
+raise Exception("Something went wrong")
+```
+
+**Catch and re-raise with context:**
+
+```python
+try:
+    result = client.get(url)
+except requests.RequestException as e:
+    raise RuntimeError(f"Failed to fetch {url}") from e
+```
+
+**Use logging for errors, not print:**
+
+```python
+logger = logging.getLogger(__name__)
+
+logger.error(f"Failed to process {source}: {e}")
+logger.warning(f"Config missing, using defaults: {e}")
+```
+
+### Async / Sync Patterns
+
+- Use `httpx.AsyncClient` for async operations
+- Use `requests` for sync operations (ETL scripts, simple API calls)
+- Never mix sync/async in the same function
+
+```python
+# Async (httpx)
+async with httpx.AsyncClient() as client:
+    response = await client.get(url)
+
+# Sync (requests)
+response = requests.get(url)
+```
+
+### Docstrings
+
+Use docstrings for modules and public classes/functions:
+
+```python
+"""
+Agent Logger for Observability Stack.
+
+Standardized logging for AI agents with Loki integration.
+"""
+
+class AgentLogger:
+    """Structured logger for AI agents."""
+    
+    def task_start(self, task_id: str, task_type: str):
+        """Log task start event."""
+        ...
+```
+
+---
+
+## Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Prefect Server                          │
-│                     (Port 4200)                            │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ PREFECT_API_URL
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Prefect Worker                         │
-│                 (Docker work pool)                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Marketing Pipeline                      │
-│  dlt sync (GA4/FB Ads/PrestaShop) → dbt run → dbt test   │
-└─────────────────────────────────────────────────────────────┘
+.
+├── scripts/          # Main ETL pipeline scripts
+│   ├── pipeline.py    # dlt pipeline orchestration
+│   ├── langgraph_etl.py
+│   └── agent_logger.py
+├── tests/             # pytest test suite
+│   ├── test_*.py
+│   └── e2e/
+├── dbt/               # dbt transformation models
+│   └── models/
+├── prefect/           # Prefect workflow definitions
+└── config/            # Configuration files
 ```
 
-### Commands
+---
+
+## Essential Commands
+
+### Health Checks
 
 ```bash
-# Start Prefect server and worker
-docker compose up -d prefect-server prefect-worker
-
-# Access Prefect UI
-open http://localhost:4200
-
-# Deploy pipeline for client
-python prefect/deployments/marketing_analytics.py --client client1
-
-# Deploy for all clients
-python prefect/deployments/marketing_analytics.py --all
-
-# Check flow status
-docker exec prefect-server prefect flow ls
+docker inspect --format='{{.State.Health.Status}}' metabase
+docker exec metabase curl -sf http://localhost:3000/api/health
+docker exec metabase-db psql -U metabase -d metabase -c "SELECT count(*) FROM report_dashboard;"
 ```
 
-### Flow Features
+### Database Access
 
-- **Parallel execution**: dlt syncs run concurrently
-- **Timeouts**: dlt (10min), dbt run (15min), dbt test (5min)
-- **Retries**: Exponential backoff with jitter
-- **Schedule**: Daily at 2 AM
+```bash
+docker exec metabase-db psql -U metabase -d metabase
+```
 
-## Documentation
+### Slow Query Analysis
+
+```bash
+docker exec metabase-db psql -U metabase -d metabase -c "
+SELECT query, calls, total_time/calls as avg_time
+FROM pg_stat_statements ORDER BY avg_time DESC LIMIT 10;"
+```
+
+---
+
+## Credentials & Secrets
+
+- **Never commit** `.env` or `.env.*` files
+- Store credentials in per-client `.env.client_name`
+- Use `~/.config/borg/` for backup passphrases
+- Borg passphrase: `~/.config/borg/metabase-passphrase`
+
+---
+
+## Non-Obvious Points
+
+- **Timezone**: Europe/Prague (JAVA_TIMEZONE and TZ)
+- **DB health wait**: `depends_on` with `service_healthy` condition
+- **ETL timing**: Runs 01:00-02:30 (before 03:00 backup)
+- **httpx vs requests**: Use `httpx` for async, `requests` for sync
+
+---
+
+## Implementation Reference
+
+Implementation guidance is organized in `docs/implementation/`:
 
 | Document | Purpose |
 |----------|---------|
-| `docs/ONBOARDING.md` | User onboarding manual |
-| `docs/DEPENDENCIES.md` | Architecture diagram |
-| `docs/DOCKER_CONVENTIONS.md` | Container/volume naming standards |
-| `docs/SOP.md` | Standard operating procedures |
-| `docs/SOPS_VAULT.md` | Secrets management (SOPS + Ansible) |
+| `docs/connectors/CONNECTOR_RESEARCH.md` | GA4, FB Ads, PrestaShop failure modes |
+| `docs/implementation/DOCKER_BLUEPRINT.md` | Production Docker Compose stack |
+| `docs/implementation/DBT_CONVENTIONS.md` | dbt project standards and templates |
+| `docs/implementation/PREFECT_FLOW.md` | Prefect orchestration flow definition |
+| `docs/implementation/QUALITY_POLICY.md` | Data quality validation strategy |
 
-## Ansible Infrastructure
+## Phase 1 Checklist
 
-```bash
-# Deploy platform with Ansible
-ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass
+### Foundation
+- [ ] Docker Compose with health checks deployed
+- [ ] PostgreSQL 17 with Metabase connected
+- [ ] Secrets in `.env` (never committed)
 
-# Backup database
-ansible-playbook ansible/playbooks/backup.yml --ask-vault-pass
+### Ingestion
+- [ ] GA4 connector validated (sampling, quota, schema drift)
+- [ ] Facebook Ads connector validated (rate limits, attribution)
+- [ ] PrestaShop connector validated (rate limits, order states)
+- [ ] First successful sync for each source
 
-# Rotate secrets
-ansible-playbook ansible/playbooks/rotate-secrets.yml --ask-vault-pass
-```
+### Transformation
+- [ ] dbt project structure following conventions
+- [ ] Staging models: `stg_ga4__traffic`, `stg_facebook__ads`, `stg_prestashop__orders`
+- [ ] One mart model: `fct_marketing_performance`
+- [ ] Tests on primary keys and business logic
 
-### Ansible Vault Setup
+### Orchestration
+- [ ] Prefect server and Docker worker running
+- [ ] Flow deployed: `marketing-analytics-pipeline`
+- [ ] Schedule: daily at 02:30 UTC
+- [ ] Alerting on failure
 
-```bash
-# Create vault password
-echo "your-password" > ~/.vault_pass
-chmod 600 ~/.vault_pass
+### Quality
+- [ ] Row count validation after sync
+- [ ] dbt tests passing
+- [ ] Revenue reconciliation (< 0.1% tolerance)
+- [ ] Slack alerts configured
 
-# Edit encrypted secrets
-ansible-vault edit ansible/group_vars/all/vault.yml.example
-```
+## Phase 2 (Deferred)
 
-## Observability Stack (LGTM+)
+- Google Ads connector
+- Google Search Console integration
+- OpenLineage for lineage tracking
+- Attribution modeling
+- Cohort analysis
+- Superset as alternative BI
 
-Full observability pipeline with Loki, Grafana, and LangGraph.
+---
 
-### Endpoints
+## Policy References
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Loki | http://100.91.164.109:3100 | Log aggregation |
-| Grafana | http://100.91.164.109:3000 | Dashboards & alerting |
-
-### Quick Commands
-
-```bash
-# Push test log to Loki
-curl -X POST "http://100.91.164.109:3100/loki/api/v1/push" \
-  -H "Content-Type: application/json" \
-  -d '{"streams":[{"stream":{"job":"test"},"values":[["'"$(date +%s)"'000000000","test message"]]}]}'
-
-# Query logs from Loki
-curl "http://100.91.164.109:3100/loki/api/v1/query?query={job=\"test\"}"
-
-# Check Loki health
-curl http://100.91.164.109:3100/ready
-
-# Run LangGraph observability pipeline
-cd /var/www/meta.expc.cz && uv run python scripts/langgraph_observability.py
-```
-
-### Files
-
-| File | Purpose |
-|------|---------|
-| `docs/observability/OBSERVABILITY_KB.md` | Full knowledge base |
-| `scripts/langgraph_observability.py` | LangGraph pipeline |
-| `scripts/agent_logger.py` | Agent logging module |
-| `config/promtail-config.yaml` | Promtail configuration |
-
-### LogQL Examples
-
-```logql
-# All logs
-{job="myapp"}
-
-# Error logs
-{job="myapp"} |= "error"
-
-# JSON parsing
-{job="api"} | json | level="error"
-
-# Rate queries
-sum(rate({level="error"}[5m]))
-
-# Top 10 errors
-topk(10, sum by (service) (rate({level="error"}[5m])))
-```
-
-### Agent Logging
-
-```python
-from agent_logger import AgentLogger
-
-logger = AgentLogger(
-    agent_name="my-agent",
-    loki_url="http://100.91.164.109:3100",
-    log_file="/var/log/agent.log"
-)
-
-logger.task_start("task-123", "code_generation")
-# ... do work ...
-logger.task_complete("task-123", "code_generation", 1500)
-logger.error("Something failed", error_type="ValueError")
-```
-
-## HTTP Client Best Practices
-
-This project uses both `requests` and `httpx` for HTTP operations.
-
-### When to Use Each
-
-| Library | Use Case | Examples |
-|---------|----------|----------|
-| `requests` | Synchronous ETL, simple API calls, dlt pipeline | Prefect workflows, Metabase API, monitoring scripts |
-| `httpx` | Async operations, concurrent requests, modern SDKs | LangGraph observability pipeline, Agent logging to Loki |
-
-### Why Both?
-
-- **`requests`**: Battle-tested, massive ecosystem (285M downloads/month), compatible with dlt/pandas, simple sync API
-- **`httpx`**: Native async/await, HTTP/2 support, 5-10x faster for concurrent requests, modern AI SDKs (OpenAI, Anthropic, HuggingFace)
-
-### Performance Considerations
-
-```
-1000 concurrent requests:
-- requests (sequential): ~102s
-- httpx async: ~18s (5.6x faster)
-- httpx async + HTTP/2: ~10s (10x faster)
-
-Memory for 10k requests:
-- requests: ~120MB
-- httpx: ~245MB (2x more)
-```
-
-### Industry Trends
-
-- **Modern AI/ML SDKs** (OpenAI, Anthropic, HuggingFace v1.0+) use httpx
-- **FastAPI** recommends httpx for async outgoing requests
-- **requests** is in maintenance mode - no new features planned, but stable
-
-### Import Guidelines
-
-```python
-# Synchronous scripts (requests)
-import requests
-
-# Async scripts (httpx)
-import httpx
-
-# Async contexts
-async with httpx.AsyncClient() as client:
-    response = await client.get(url)
-```
-
-### Testing
-
-| Library | Mock Tool |
-|---------|-----------|
-| `requests` | `responses` or `requests-mock` |
-| `httpx` | `pytest-httpx` or `respx` |
+- `.agent/agents.md` — Agent behavior
+- `.agent/constitution/rules.md` — Hard guards
+- `.agent/constitution/embedding-policy.md` — Dashboard embedding
+- `.agent/constitution/database-policy.md` — PostgreSQL config

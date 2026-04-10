@@ -5,6 +5,7 @@
 .env.client*
 !.env.example
 users-tasks.md
+users-manual.md
 
 # Secrets (SOPS/Ansible Vault)
 secrets/
@@ -21,15 +22,35 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
 
 # Agent/IDE tooling
 .kilo/node_modules/
+.kilo/cache/
 .opencode/node_modules/
 .agent/state/
 .agent/portfolio/
+.cline/
+.history/
 
 # IDE
 .idea/
+.vscode/
+*.code-workspace
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
 
 # Backup files
 *-backup-*
@@ -40,3 +61,18 @@ Thumbs.db
 
 # Metabase data (use PostgreSQL instead)
 metabase-data/
+metabase/*.db
+metabase/plugins/
+
+# Prefect
+prefect/storage/
+prefect/results/
+
+# Docker volumes
+docker/volumes/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
